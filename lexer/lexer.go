@@ -140,3 +140,7 @@ if (input[i] >= '0' && input[i] <= '9') || input[i] == '-' {
 
 	return tokens
 }
+
+func TokenizeInput(start *automata.DFAState, input string) []Token {
+	return RunDFA(start, input)
+}
