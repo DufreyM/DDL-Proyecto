@@ -144,3 +144,7 @@ if (input[i] >= '0' && input[i] <= '9') || input[i] == '-' {
 func TokenizeInput(start *automata.DFAState, input string) []Token {
 	return RunDFA(start, input)
 }
+
+func ProcessYalInput(start *automata.DFAState, input string) []Token {
+	return TokenizeInput(start, input)
+}
