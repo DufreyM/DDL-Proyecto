@@ -1,0 +1,15 @@
+%token ID
+%token PLUS
+%token INT_LIT
+
+%%
+
+expr:
+ expr PLUS term
+ | term
+;
+
+term:
+ INT_LIT
+ | ID
+;

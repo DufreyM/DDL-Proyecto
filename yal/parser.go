@@ -16,12 +16,15 @@ type Rule struct {
 func ParseYAL(path string) ([]Rule, error) {
 
 	file, err := os.Open(path)
+
 	if err != nil {
 		return nil, err
 	}
+
 	defer file.Close()
 
 	letDefs := map[string]string{}
+
 	var rules []Rule
 
 	scanner := bufio.NewScanner(file)
@@ -30,48 +33,76 @@ func ParseYAL(path string) ([]Rule, error) {
 	priority := 0
 
 	for scanner.Scan() {
+
 		line := strings.TrimSpace(scanner.Text())
 
-		if line == "" || strings.HasPrefix(line, "(*") {
+		// ignorar vacío/comentarios
+		if line == "" ||
+			strings.HasPrefix(line, "(*") {
+
 			continue
 		}
 
-		// -------------------------
+		// =========================
 		// LET
-		// -------------------------
+		// =========================
 		if strings.HasPrefix(line, "let ") {
+
 			parts := strings.Split(line, "=")
-			name := strings.TrimSpace(strings.Replace(parts[0], "let", "", 1))
+
+			name := strings.TrimSpace(
+				strings.Replace(
+					parts[0],
+					"let",
+					"",
+					1,
+				),
+			)
+
 			value := strings.TrimSpace(parts[1])
+
 			letDefs[name] = value
+
 			continue
 		}
 
-		// -------------------------
+		// =========================
 		// RULES START
-		// -------------------------
-		if strings.HasPrefix(line, "rule gettoken") {
+		// =========================
+		if strings.HasPrefix(line, "rule ") {
+
 			inRules = true
+
 			continue
 		}
 
+		// =========================
+		// RULES
+		// =========================
 		if inRules {
 
-			re := regexp.MustCompile(`\|\s*(.+)\s*\{\s*return\s+(\w+)`)
+			re := regexp.MustCompile(
+				`\|\s*(.+?)\s*\{\s*return\s+([A-Z_]+)\s*\}`,
+			)
+
 			m := re.FindStringSubmatch(line)
 
 			if len(m) == 3 {
 
 				raw := strings.TrimSpace(m[1])
+
 				token := m[2]
 
 				regex := expand(raw, letDefs)
 
-				rules = append(rules, Rule{
-					Regex:    regex,
-					Token:    token,
-					Priority: priority,
-				})
+				rules = append(
+					rules,
+					Rule{
+						Regex:    regex,
+						Token:    token,
+						Priority: priority,
+					},
+				)
 
 				priority++
 			}
@@ -87,36 +118,92 @@ func expand(expr string, lets map[string]string) string {
 	// 1. STRING LITERAL
 	// =========================
 	if strings.HasPrefix(expr, "\"") {
+
 		s := strings.Trim(expr, "\"")
 
 		var result []string
+
 		for _, c := range s {
 			result = append(result, string(c))
 		}
+
 		return strings.Join(result, "")
 	}
 
 	// =========================
-	// 2. EXPAND LETS (REPETIR)
+	// 2. EXPAND LETS
 	// =========================
 	changed := true
+
 	for changed {
+
 		changed = false
+
 		for name, val := range lets {
+
 			if strings.Contains(expr, name) {
-				expr = strings.ReplaceAll(expr, name, "("+val+")")
+
+				expr = strings.ReplaceAll(
+					expr,
+					name,
+					"("+val+")",
+				)
+
 				changed = true
 			}
 		}
 	}
 
 	// =========================
-	// 3. EXPAND RANGES ['a'-'z']
+	// 3. SIMPLE CHAR SETS
+	// Ej: [+]
+	// =========================
+	simpleSetRe := regexp.MustCompile(`\[(.)\]`)
+
+	for {
+
+		match := simpleSetRe.FindStringSubmatch(expr)
+
+		if match == nil {
+			break
+		}
+
+		replacement := match[1]
+
+		// escapar operadores regex
+		switch replacement {
+
+		case "+":
+			replacement = "@"
+
+		case "*":
+			replacement = "#"
+
+		case "?":
+			replacement = "~"
+
+		case "|":
+			replacement = "&"
+		}
+
+		expr = strings.Replace(
+			expr,
+			match[0],
+			replacement,
+			1,
+		)
+	}
+
+	// =========================
+	// 4. EXPAND RANGES
+	// ['a'-'z']
 	// =========================
 	rangeRe := regexp.MustCompile(`\['(.?)'-'(.?)'\]`)
 
 	for {
+
 		match := rangeRe.FindStringSubmatch(expr)
+
 		if match == nil {
 			break
 		}
@@ -125,22 +212,37 @@ func expand(expr string, lets map[string]string) string {
 		end := match[2][0]
 
 		var parts []string
+
 		for c := start; c <= end; c++ {
 			parts = append(parts, string(c))
 		}
 
-		replacement := "(" + strings.Join(parts, "|") + ")"
-		expr = strings.Replace(expr, match[0], replacement, 1)
+		replacement := "(" +
+			strings.Join(parts, "|") +
+			")"
+
+		expr = strings.Replace(
+			expr,
+			match[0],
+			replacement,
+			1,
+		)
 	}
 
 	// =========================
-	// FIX digit (CRÍTICO)
+	// FIX digit
 	// =========================
 	if val, ok := lets["digit"]; ok {
-		expr = strings.ReplaceAll(expr, "digit", "("+val+")")
+
+		expr = strings.ReplaceAll(
+			expr,
+			"digit",
+			"("+val+")",
+		)
 	}
+
 	// =========================
-	// 4. LIMPIAR ESPACIOS
+	// LIMPIAR ESPACIOS
 	// =========================
 	expr = strings.ReplaceAll(expr, " ", "")
 
