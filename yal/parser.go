@@ -13,6 +13,38 @@ type Rule struct {
 	Priority int
 }
 
+// =========================
+// ESCAPE LITERALS
+// =========================
+func escapeLiteral(symbol string) string {
+
+	switch symbol {
+
+	case "+":
+		return "@"
+
+	case "*":
+		return "#"
+
+	case "?":
+		return "~"
+
+	case "|":
+		return "&"
+
+	case "(":
+		return "«"
+
+	case ")":
+		return "»"
+
+	case ".":
+		return "^"
+	}
+
+	return symbol
+}
+
 func ParseYAL(path string) ([]Rule, error) {
 
 	file, err := os.Open(path)
@@ -36,7 +68,9 @@ func ParseYAL(path string) ([]Rule, error) {
 
 		line := strings.TrimSpace(scanner.Text())
 
-		// ignorar vacío/comentarios
+		// =========================
+		// IGNORAR VACÍO / COMMENTS
+		// =========================
 		if line == "" ||
 			strings.HasPrefix(line, "(*") {
 
@@ -49,6 +83,10 @@ func ParseYAL(path string) ([]Rule, error) {
 		if strings.HasPrefix(line, "let ") {
 
 			parts := strings.Split(line, "=")
+
+			if len(parts) < 2 {
+				continue
+			}
 
 			name := strings.TrimSpace(
 				strings.Replace(
@@ -82,7 +120,7 @@ func ParseYAL(path string) ([]Rule, error) {
 		if inRules {
 
 			re := regexp.MustCompile(
-				`\|\s*(.+?)\s*\{\s*return\s+([A-Z_]+)\s*\}`,
+				`\|\s*(.+?)\s*\{\s*return\s+([A-Z_]+|lexbuf)\s*\}`,
 			)
 
 			m := re.FindStringSubmatch(line)
@@ -92,6 +130,11 @@ func ParseYAL(path string) ([]Rule, error) {
 				raw := strings.TrimSpace(m[1])
 
 				token := m[2]
+
+				// ignorar lexbuf
+				if token == "lexbuf" {
+					continue
+				}
 
 				regex := expand(raw, letDefs)
 
@@ -115,7 +158,8 @@ func ParseYAL(path string) ([]Rule, error) {
 func expand(expr string, lets map[string]string) string {
 
 	// =========================
-	// 1. STRING LITERAL
+	// STRING LITERALS
+	// Ej: "<-"  "=="  "&&"
 	// =========================
 	if strings.HasPrefix(expr, "\"") {
 
@@ -124,14 +168,29 @@ func expand(expr string, lets map[string]string) string {
 		var result []string
 
 		for _, c := range s {
-			result = append(result, string(c))
+
+			result = append(
+				result,
+				escapeLiteral(string(c)),
+			)
 		}
 
 		return strings.Join(result, "")
 	}
+	// =========================
+	// SINGLE CHAR LITERALS
+	// Ej: '('  ')'  '{'
+	// =========================
+	if strings.HasPrefix(expr, "'") &&
+		len(expr) == 3 {
+
+		return escapeLiteral(
+			string(expr[1]),
+		)
+	}
 
 	// =========================
-	// 2. EXPAND LETS
+	// EXPAND LETS
 	// =========================
 	changed := true
 
@@ -155,70 +214,76 @@ func expand(expr string, lets map[string]string) string {
 	}
 
 	// =========================
-	// 3. SIMPLE CHAR SETS
-	// Ej: [+]
+	// CHARACTER SETS
 	// =========================
-	simpleSetRe := regexp.MustCompile(`\[(.)\]`)
+	setRe := regexp.MustCompile(`\[(.*?)\]`)
 
 	for {
 
-		match := simpleSetRe.FindStringSubmatch(expr)
+		match := setRe.FindStringSubmatch(expr)
 
 		if match == nil {
 			break
 		}
 
-		replacement := match[1]
+		content := match[1]
 
-		// escapar operadores regex
-		switch replacement {
+		var symbols []string
 
-		case "+":
-			replacement = "@"
+		i := 0
 
-		case "*":
-			replacement = "#"
+		for i < len(content) {
 
-		case "?":
-			replacement = "~"
+			// ignorar espacios
+			if content[i] == ' ' {
+				i++
+				continue
+			}
 
-		case "|":
-			replacement = "&"
-		}
+			// rango: 'a'-'z'
+			if i+6 < len(content) &&
+				content[i] == '\'' &&
+				content[i+2] == '\'' &&
+				content[i+3] == '-' &&
+				content[i+4] == '\'' &&
+				content[i+6] == '\'' {
 
-		expr = strings.Replace(
-			expr,
-			match[0],
-			replacement,
-			1,
-		)
-	}
+				start := content[i+1]
+				end := content[i+5]
 
-	// =========================
-	// 4. EXPAND RANGES
-	// ['a'-'z']
-	// =========================
-	rangeRe := regexp.MustCompile(`\['(.?)'-'(.?)'\]`)
+				for c := start; c <= end; c++ {
 
-	for {
+					symbols = append(
+						symbols,
+						escapeLiteral(string(c)),
+					)
+				}
 
-		match := rangeRe.FindStringSubmatch(expr)
+				i += 7
+				continue
+			}
 
-		if match == nil {
-			break
-		}
+			// símbolo simple: '+'
+			if i+2 < len(content) &&
+				content[i] == '\'' &&
+				content[i+2] == '\'' {
 
-		start := match[1][0]
-		end := match[2][0]
+				symbol := string(content[i+1])
 
-		var parts []string
+				symbols = append(
+					symbols,
+					escapeLiteral(symbol),
+				)
 
-		for c := start; c <= end; c++ {
-			parts = append(parts, string(c))
+				i += 3
+				continue
+			}
+
+			i++
 		}
 
 		replacement := "(" +
-			strings.Join(parts, "|") +
+			strings.Join(symbols, "|") +
 			")"
 
 		expr = strings.Replace(
@@ -230,13 +295,37 @@ func expand(expr string, lets map[string]string) string {
 	}
 
 	// =========================
-	// FIX digit
+	// REMOVE SIMPLE QUOTES
+	// Ej: 'a' -> a
 	// =========================
-	if val, ok := lets["digit"]; ok {
+	quoteRe := regexp.MustCompile(`'(.)'`)
+
+	for {
+
+		match := quoteRe.FindStringSubmatch(expr)
+
+		if match == nil {
+			break
+		}
+
+		replacement := escapeLiteral(match[1])
+
+		expr = strings.Replace(
+			expr,
+			match[0],
+			replacement,
+			1,
+		)
+	}
+
+	// =========================
+	// FIX COMMON LETS
+	// =========================
+	for name, val := range lets {
 
 		expr = strings.ReplaceAll(
 			expr,
-			"digit",
+			name,
 			"("+val+")",
 		)
 	}

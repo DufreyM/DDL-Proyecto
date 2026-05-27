@@ -9,7 +9,7 @@ func BuildNFA(postfix string) *NFA {
 		switch c {
 
 		// =========================
-		// KLEENE
+		// KLEENE STAR
 		// =========================
 		case '*':
 
@@ -32,7 +32,10 @@ func BuildNFA(postfix string) *NFA {
 
 			stack = append(
 				stack,
-				&NFA{start, end},
+				&NFA{
+					Start: start,
+					End:   end,
+				},
 			)
 
 		// =========================
@@ -58,7 +61,10 @@ func BuildNFA(postfix string) *NFA {
 
 			stack = append(
 				stack,
-				&NFA{start, end},
+				&NFA{
+					Start: start,
+					End:   end,
+				},
 			)
 
 		// =========================
@@ -84,7 +90,10 @@ func BuildNFA(postfix string) *NFA {
 
 			stack = append(
 				stack,
-				&NFA{start, end},
+				&NFA{
+					Start: start,
+					End:   end,
+				},
 			)
 
 		// =========================
@@ -116,11 +125,14 @@ func BuildNFA(postfix string) *NFA {
 
 			stack = append(
 				stack,
-				&NFA{start, end},
+				&NFA{
+					Start: start,
+					End:   end,
+				},
 			)
 
 		// =========================
-		// CONCAT
+		// CONCATENATION
 		// =========================
 		case '.':
 
@@ -135,17 +147,17 @@ func BuildNFA(postfix string) *NFA {
 			stack = append(
 				stack,
 				&NFA{
-					nfa1.Start,
-					nfa2.End,
+					Start: nfa1.Start,
+					End:   nfa2.End,
 				},
 			)
 
 		// =========================
-		// LITERAL
+		// LITERALS
 		// =========================
 		default:
 
-			// restaurar escapes
+			// restaurar escapes internos
 			switch c {
 
 			case '@':
@@ -160,11 +172,14 @@ func BuildNFA(postfix string) *NFA {
 			case '&':
 				c = '|'
 
-			case '<':
+			case '«':
 				c = '('
 
-			case '>':
+			case '»':
 				c = ')'
+
+			case '^':
+				c = '.'
 
 			case '%':
 				c = '\\'
@@ -180,7 +195,10 @@ func BuildNFA(postfix string) *NFA {
 
 			stack = append(
 				stack,
-				&NFA{start, end},
+				&NFA{
+					Start: start,
+					End:   end,
+				},
 			)
 		}
 	}

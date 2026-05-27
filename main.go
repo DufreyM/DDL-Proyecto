@@ -146,7 +146,7 @@ func main() {
 	// 8. READ YALP
 	fmt.Println("\nReading YALP...")
 
-	yalpContent, err := yapar.ReadYalpFile("test.yalp")
+	yalpContent, err := yapar.ReadYalpFile("pico.yalp")
 
 	if err != nil {
 		panic(err)
@@ -189,7 +189,7 @@ func main() {
 
 	states := syntax.BuildCanonicalCollection(
 		grammar,
-		"expr",
+		"program",
 	)
 
 	fmt.Printf(
@@ -230,7 +230,7 @@ func main() {
 	table := syntax.BuildSLRTable(
 		grammar,
 		states,
-		"expr",
+		"program",
 	)
 
 	fmt.Println("SLR table generated")
@@ -242,7 +242,7 @@ func main() {
 		table,
 		tokenStream,
 		grammar,
-		"expr",
+		"program",
 	)
 
 	// FINAL RESULT

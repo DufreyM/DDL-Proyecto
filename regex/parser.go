@@ -3,18 +3,24 @@ package regex
 import "strings"
 
 func precedence(op rune) int {
+
 	switch op {
+
 	case '|':
 		return 1
+
 	case '.':
 		return 2
+
 	case '*', '+', '?':
 		return 3
 	}
+
 	return 0
 }
 
 func isOperator(c rune) bool {
+
 	return c == '|' ||
 		c == '*' ||
 		c == '.' ||
@@ -28,25 +34,65 @@ func isOperator(c rune) bool {
 func preprocessEscapes(regex string) string {
 
 	replacements := map[string]string{
+
 		`\+`: "@",
 		`\*`: "#",
 		`\?`: "~",
 		`\|`: "&",
-		`\(`: "<",
-		`\)`: ">",
+		`\(`: "«",
+		`\)`: "»",
 		`\\`: "%",
+		`\.`: "^",
 	}
 
 	for old, newVal := range replacements {
-		regex = strings.ReplaceAll(regex, old, newVal)
+
+		regex = strings.ReplaceAll(
+			regex,
+			old,
+			newVal,
+		)
 	}
 
 	return regex
 }
 
+// =========================
+// CONCATENATION
+// =========================
 func addConcat(regex string) string {
 
 	result := ""
+
+	isLiteral := func(c byte) bool {
+
+		// letras
+		if (c >= 'a' && c <= 'z') ||
+			(c >= 'A' && c <= 'Z') {
+			return true
+		}
+
+		// números
+		if c >= '0' && c <= '9' {
+			return true
+		}
+
+		// literales escapados
+		switch c {
+
+		case '@', '#', '~', '&',
+			'<', '>', '^', '%',
+			'_', '"',
+			'{', '}',
+			';', ',',
+			':', '=', '!',
+			'-', '/', '\\':
+
+			return true
+		}
+
+		return false
+	}
 
 	for i := 0; i < len(regex); i++ {
 
@@ -54,26 +100,34 @@ func addConcat(regex string) string {
 
 		result += string(c)
 
-		if i+1 < len(regex) {
+		if i+1 >= len(regex) {
+			continue
+		}
 
-			d := regex[i+1]
+		d := regex[i+1]
 
-			if (c != '(' &&
-				c != '|') &&
-				(d != ')' &&
-					d != '|' &&
-					d != '*' &&
-					d != '+' &&
-					d != '?') {
+		left :=
+			isLiteral(c) ||
+				c == ')' ||
+				c == '*' ||
+				c == '+' ||
+				c == '?'
 
-				result += "."
-			}
+		right :=
+			isLiteral(d) ||
+				d == '('
+
+		if left && right {
+			result += "."
 		}
 	}
 
 	return result
 }
 
+// =========================
+// INFIX -> POSTFIX
+// =========================
 func ToPostfix(regex string) string {
 
 	regex = preprocessEscapes(regex)
@@ -87,10 +141,16 @@ func ToPostfix(regex string) string {
 
 		switch {
 
+		// =========================
+		// OPEN PAREN
+		// =========================
 		case c == '(':
 
 			stack = append(stack, c)
 
+		// =========================
+		// CLOSE PAREN
+		// =========================
 		case c == ')':
 
 			for len(stack) > 0 &&
@@ -105,13 +165,19 @@ func ToPostfix(regex string) string {
 			}
 
 			if len(stack) > 0 {
+
 				stack = stack[:len(stack)-1]
 			}
 
+		// =========================
+		// OPERATORS
+		// =========================
 		case isOperator(c):
 
 			for len(stack) > 0 &&
-				precedence(stack[len(stack)-1]) >= precedence(c) {
+				precedence(
+					stack[len(stack)-1],
+				) >= precedence(c) {
 
 				output = append(
 					output,
@@ -123,12 +189,18 @@ func ToPostfix(regex string) string {
 
 			stack = append(stack, c)
 
+		// =========================
+		// LITERALS
+		// =========================
 		default:
 
 			output = append(output, c)
 		}
 	}
 
+	// =========================
+	// EMPTY STACK
+	// =========================
 	for len(stack) > 0 {
 
 		output = append(

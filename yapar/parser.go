@@ -11,7 +11,9 @@ type ParserSpec struct {
 	Productions map[string][][]string
 }
 
+// =========================
 // READ FILE
+// =========================
 func ReadYalpFile(path string) (string, error) {
 
 	data, err := os.ReadFile(path)
@@ -23,16 +25,36 @@ func ReadYalpFile(path string) (string, error) {
 	return string(data), nil
 }
 
+// =========================
 // EXTRACT TOKENS
+// =========================
 func ExtractTokens(content string) []string {
 
 	lines := strings.Split(content, "\n")
 
 	var tokens []string
 
+	inComment := false
+
 	for _, line := range lines {
 
 		line = strings.TrimSpace(line)
+
+		// inicio comment
+		if strings.Contains(line, "/*") {
+
+			inComment = true
+		}
+
+		// ignorar comment
+		if inComment {
+
+			if strings.Contains(line, "*/") {
+				inComment = false
+			}
+
+			continue
+		}
 
 		if strings.HasPrefix(line, "%token") {
 
@@ -40,7 +62,10 @@ func ExtractTokens(content string) []string {
 
 			if len(parts) > 1 {
 
-				tokens = append(tokens, parts[1:]...)
+				tokens = append(
+					tokens,
+					parts[1:]...,
+				)
 			}
 		}
 	}
@@ -48,48 +73,88 @@ func ExtractTokens(content string) []string {
 	return tokens
 }
 
+// =========================
 // EXTRACT PRODUCTIONS
-func ExtractProductions(content string) map[string][][]string {
+// =========================
+func ExtractProductions(
+	content string,
+) map[string][][]string {
 
-	productions := make(map[string][][]string)
+	productions := make(
+		map[string][][]string,
+	)
 
 	lines := strings.Split(content, "\n")
 
 	var current string
+	inComment := false
 
 	for _, line := range lines {
 
 		line = strings.TrimSpace(line)
 
-		// ignorar vacío
+		// =========================
+		// IGNORAR COMMENTS MULTILINE
+		// =========================
+		if strings.Contains(line, "/*") {
+
+			inComment = true
+		}
+
+		if inComment {
+
+			if strings.Contains(line, "*/") {
+				inComment = false
+			}
+
+			continue
+		}
+
+		// =========================
+		// IGNORAR VACÍO
+		// =========================
 		if line == "" {
 			continue
 		}
 
-		// ignorar %%
+		// =========================
+		// IGNORAR %%
+		// =========================
 		if line == "%%" {
 			continue
 		}
 
-		// ignorar ;
+		// =========================
+		// IGNORAR ;
+		// =========================
 		if line == ";" {
 			continue
 		}
 
 		// =========================
 		// NUEVA PRODUCCIÓN
+		// expr:
 		// =========================
 		if strings.Contains(line, ":") {
 
-			parts := strings.Split(line, ":")
+			parts := strings.Split(
+				line,
+				":",
+			)
 
-			current = strings.TrimSpace(parts[0])
+			current = strings.TrimSpace(
+				parts[0],
+			)
 
-			right := strings.TrimSpace(parts[1])
+			right := strings.TrimSpace(
+				parts[1],
+			)
 
 			if right != "" {
 
-				rule := strings.Fields(right)
+				rule := strings.Fields(
+					right,
+				)
 
 				if len(rule) > 0 &&
 					rule[len(rule)-1] == ";" {
@@ -107,15 +172,21 @@ func ExtractProductions(content string) map[string][][]string {
 		}
 
 		// =========================
-		// ALTERNATIVA CON |
+		// ALTERNATIVA
+		// | expr
 		// =========================
 		if strings.HasPrefix(line, "|") {
 
 			content := strings.TrimSpace(
-				strings.TrimPrefix(line, "|"),
+				strings.TrimPrefix(
+					line,
+					"|",
+				),
 			)
 
-			rule := strings.Fields(content)
+			rule := strings.Fields(
+				content,
+			)
 
 			if len(rule) > 0 &&
 				rule[len(rule)-1] == ";" {
@@ -142,6 +213,7 @@ func ExtractProductions(content string) map[string][][]string {
 			if len(rule) > 0 {
 
 				if rule[len(rule)-1] == ";" {
+
 					rule = rule[:len(rule)-1]
 				}
 
@@ -150,19 +222,6 @@ func ExtractProductions(content string) map[string][][]string {
 					rule,
 				)
 			}
-		}
-
-		// producción alternativa
-		if strings.HasPrefix(line, "|") {
-
-			rule := strings.Fields(
-				strings.TrimPrefix(line, "|"),
-			)
-
-			productions[current] = append(
-				productions[current],
-				rule,
-			)
 		}
 	}
 
