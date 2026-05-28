@@ -13,15 +13,50 @@ type Rule struct {
 	Priority int
 }
 
+// =========================
+// ESCAPE LITERALS
+// =========================
+func escapeLiteral(symbol string) string {
+
+	switch symbol {
+
+	case "+":
+		return "@"
+
+	case "*":
+		return "#"
+
+	case "?":
+		return "~"
+
+	case "|":
+		return "&"
+
+	case "(":
+		return "«"
+
+	case ")":
+		return "»"
+
+	case ".":
+		return "^"
+	}
+
+	return symbol
+}
+
 func ParseYAL(path string) ([]Rule, error) {
 
 	file, err := os.Open(path)
+
 	if err != nil {
 		return nil, err
 	}
+
 	defer file.Close()
 
 	letDefs := map[string]string{}
+
 	var rules []Rule
 
 	scanner := bufio.NewScanner(file)
@@ -30,48 +65,87 @@ func ParseYAL(path string) ([]Rule, error) {
 	priority := 0
 
 	for scanner.Scan() {
+
 		line := strings.TrimSpace(scanner.Text())
 
-		if line == "" || strings.HasPrefix(line, "(*") {
+		// =========================
+		// IGNORAR VACÍO / COMMENTS
+		// =========================
+		if line == "" ||
+			strings.HasPrefix(line, "(*") {
+
 			continue
 		}
 
-		// -------------------------
+		// =========================
 		// LET
-		// -------------------------
+		// =========================
 		if strings.HasPrefix(line, "let ") {
+
 			parts := strings.Split(line, "=")
-			name := strings.TrimSpace(strings.Replace(parts[0], "let", "", 1))
+
+			if len(parts) < 2 {
+				continue
+			}
+
+			name := strings.TrimSpace(
+				strings.Replace(
+					parts[0],
+					"let",
+					"",
+					1,
+				),
+			)
+
 			value := strings.TrimSpace(parts[1])
+
 			letDefs[name] = value
+
 			continue
 		}
 
-		// -------------------------
+		// =========================
 		// RULES START
-		// -------------------------
-		if strings.HasPrefix(line, "rule gettoken") {
+		// =========================
+		if strings.HasPrefix(line, "rule ") {
+
 			inRules = true
+
 			continue
 		}
 
+		// =========================
+		// RULES
+		// =========================
 		if inRules {
 
-			re := regexp.MustCompile(`\|\s*(.+)\s*\{\s*return\s+(\w+)`)
+			re := regexp.MustCompile(
+				`\|\s*(.+?)\s*\{\s*return\s+([A-Z_]+|lexbuf)\s*\}`,
+			)
+
 			m := re.FindStringSubmatch(line)
 
 			if len(m) == 3 {
 
 				raw := strings.TrimSpace(m[1])
+
 				token := m[2]
+
+				// ignorar lexbuf
+				if token == "lexbuf" {
+					continue
+				}
 
 				regex := expand(raw, letDefs)
 
-				rules = append(rules, Rule{
-					Regex:    regex,
-					Token:    token,
-					Priority: priority,
-				})
+				rules = append(
+					rules,
+					Rule{
+						Regex:    regex,
+						Token:    token,
+						Priority: priority,
+					},
+				)
 
 				priority++
 			}
@@ -84,63 +158,180 @@ func ParseYAL(path string) ([]Rule, error) {
 func expand(expr string, lets map[string]string) string {
 
 	// =========================
-	// 1. STRING LITERAL
+	// STRING LITERALS
+	// Ej: "<-"  "=="  "&&"
 	// =========================
 	if strings.HasPrefix(expr, "\"") {
+
 		s := strings.Trim(expr, "\"")
 
 		var result []string
+
 		for _, c := range s {
-			result = append(result, string(c))
+
+			result = append(
+				result,
+				escapeLiteral(string(c)),
+			)
 		}
+
 		return strings.Join(result, "")
+	}
+	// =========================
+	// SINGLE CHAR LITERALS
+	// Ej: '('  ')'  '{'
+	// =========================
+	if strings.HasPrefix(expr, "'") &&
+		len(expr) == 3 {
+
+		return escapeLiteral(
+			string(expr[1]),
+		)
 	}
 
 	// =========================
-	// 2. EXPAND LETS (REPETIR)
+	// EXPAND LETS
 	// =========================
 	changed := true
+
 	for changed {
+
 		changed = false
+
 		for name, val := range lets {
+
 			if strings.Contains(expr, name) {
-				expr = strings.ReplaceAll(expr, name, "("+val+")")
+
+				expr = strings.ReplaceAll(
+					expr,
+					name,
+					"("+val+")",
+				)
+
 				changed = true
 			}
 		}
 	}
 
 	// =========================
-	// 3. EXPAND RANGES ['a'-'z']
+	// CHARACTER SETS
 	// =========================
-	rangeRe := regexp.MustCompile(`\['(.?)'-'(.?)'\]`)
+	setRe := regexp.MustCompile(`\[(.*?)\]`)
 
 	for {
-		match := rangeRe.FindStringSubmatch(expr)
+
+		match := setRe.FindStringSubmatch(expr)
+
 		if match == nil {
 			break
 		}
 
-		start := match[1][0]
-		end := match[2][0]
+		content := match[1]
 
-		var parts []string
-		for c := start; c <= end; c++ {
-			parts = append(parts, string(c))
+		var symbols []string
+
+		i := 0
+
+		for i < len(content) {
+
+			// ignorar espacios
+			if content[i] == ' ' {
+				i++
+				continue
+			}
+
+			// rango: 'a'-'z'
+			if i+6 < len(content) &&
+				content[i] == '\'' &&
+				content[i+2] == '\'' &&
+				content[i+3] == '-' &&
+				content[i+4] == '\'' &&
+				content[i+6] == '\'' {
+
+				start := content[i+1]
+				end := content[i+5]
+
+				for c := start; c <= end; c++ {
+
+					symbols = append(
+						symbols,
+						escapeLiteral(string(c)),
+					)
+				}
+
+				i += 7
+				continue
+			}
+
+			// símbolo simple: '+'
+			if i+2 < len(content) &&
+				content[i] == '\'' &&
+				content[i+2] == '\'' {
+
+				symbol := string(content[i+1])
+
+				symbols = append(
+					symbols,
+					escapeLiteral(symbol),
+				)
+
+				i += 3
+				continue
+			}
+
+			i++
 		}
 
-		replacement := "(" + strings.Join(parts, "|") + ")"
-		expr = strings.Replace(expr, match[0], replacement, 1)
+		replacement := "(" +
+			strings.Join(symbols, "|") +
+			")"
+
+		expr = strings.Replace(
+			expr,
+			match[0],
+			replacement,
+			1,
+		)
 	}
 
 	// =========================
-	// FIX digit (CRÍTICO)
+	// REMOVE SIMPLE QUOTES
+	// Ej: 'a' -> a
 	// =========================
-	if val, ok := lets["digit"]; ok {
-		expr = strings.ReplaceAll(expr, "digit", "("+val+")")
+	quoteRe := regexp.MustCompile(`'(.)'`)
+
+	for {
+
+		match := quoteRe.FindStringSubmatch(expr)
+
+		if match == nil {
+			break
+		}
+
+		replacement := escapeLiteral(match[1])
+
+		expr = strings.Replace(
+			expr,
+			match[0],
+			replacement,
+			1,
+		)
 	}
+
 	// =========================
-	// 4. LIMPIAR ESPACIOS
+	// FIX COMMON LETS
+	// =========================
+	for name, val := range lets {
+
+		expr = strings.ReplaceAll(
+			expr,
+			name,
+			"("+val+")",
+		)
+	}
+
+	// =========================
+	// LIMPIAR ESPACIOS
 	// =========================
 	expr = strings.ReplaceAll(expr, " ", "")
 
