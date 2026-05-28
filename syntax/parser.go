@@ -29,12 +29,22 @@ func Parse(
 		action, ok := table.Action[state][token]
 
 		if !ok {
+			if !ok {
 
-			fmt.Printf(
-				"SYNTAX ERROR: state=%d token=%s\n",
-				state,
-				token,
-			)
+				expected := []string{}
+
+				for terminal := range table.Action[state] {
+					expected = append(expected, terminal)
+				}
+
+				fmt.Printf(
+					"SYNTAX ERROR: expected %v but found %s\n",
+					expected,
+					token,
+				)
+
+				return false
+			}
 
 			return false
 		}

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"yalex-full/automata"
 	"yalex-full/generator"
@@ -46,7 +47,36 @@ func main() {
 	for i, r := range rules {
 
 		fmt.Printf("Rule: %s -> %s\n", r.Token, r.Regex)
+		// tokens directos especiales
+		special := strings.TrimSpace(r.Regex)
 
+if special == "(" ||
+	special == ")" ||
+	special == "{" ||
+	special == "}" {
+
+			start := automata.NewState()
+			end := automata.NewState()
+
+			start.Transitions[rune(special[0])] =
+				append(
+					start.Transitions[rune(special[0])],
+					end,
+				)
+
+			nfa := &automata.NFA{
+				Start: start,
+				End:   end,
+			}
+
+			nfa.End.Final = true
+			nfa.End.Token = r.Token
+			nfa.End.Priority = r.Priority
+
+			nfas = append(nfas, nfa)
+
+			continue
+		}
 		postfix := regex.ToPostfix(r.Regex)
 
 		fmt.Printf("Postfix: %s\n", postfix)
@@ -141,7 +171,15 @@ func main() {
 	}
 
 	fmt.Println("\nTOKEN STREAM:")
-	fmt.Println(tokenStream)
+
+	for i, t := range tokenStream {
+
+		fmt.Printf(
+			"%d -> %s\n",
+			i,
+			t,
+		)
+	}
 
 	// 8. READ YALP
 	fmt.Println("\nReading YALP...")

@@ -135,7 +135,7 @@ func ExtractProductions(
 		// NUEVA PRODUCCIÓN
 		// expr:
 		// =========================
-		if strings.Contains(line, ":") {
+		if strings.HasSuffix(line, ":") {
 
 			parts := strings.Split(
 				line,
@@ -145,28 +145,6 @@ func ExtractProductions(
 			current = strings.TrimSpace(
 				parts[0],
 			)
-
-			right := strings.TrimSpace(
-				parts[1],
-			)
-
-			if right != "" {
-
-				rule := strings.Fields(
-					right,
-				)
-
-				if len(rule) > 0 &&
-					rule[len(rule)-1] == ";" {
-
-					rule = rule[:len(rule)-1]
-				}
-
-				productions[current] = append(
-					productions[current],
-					rule,
-				)
-			}
 
 			continue
 		}
