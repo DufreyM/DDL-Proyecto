@@ -1,0 +1,212 @@
+/* volt.yalp — YAPar specification for the VOLT language */
+
+/* ── Token declarations ── */
+%token INT_VAR
+%token BOOL_VAR
+%token STR_VAR
+%token INT_LIT
+%token STR_LIT
+%token BOOL_LIT
+%token IDENT
+
+%token KW_WIRE
+%token KW_ZAP
+%token KW_CHECK
+%token KW_NOPE
+%token KW_DONE
+%token KW_LOOP
+%token KW_STOP
+%token KW_VOLT
+%token KW_END
+%token KW_GIVE
+
+%token OP_ADD
+%token OP_SUB
+%token OP_MUL
+%token OP_DIV
+%token OP_MOD
+
+%token CMP_EQ
+%token CMP_NEQ
+%token CMP_LT
+%token CMP_GT
+%token CMP_LTE
+%token CMP_GTE
+
+%token BOOL_AND
+%token BOOL_OR
+%token BOOL_NOT
+
+%token ASSIGN
+%token LPAREN
+%token RPAREN
+%token LBRACKET
+%token RBRACKET
+%token SEMICOLON
+%token COLON
+%token COMMA
+
+%%
+
+/* ── Productions ── */
+
+/* A program is a mix of function definitions and statements at the top level */
+program:
+    top_level_list
+;
+
+top_level_list:
+    top_level_list top_level_item
+  | top_level_item
+;
+
+top_level_item:
+    statement
+  | func_def
+;
+
+/* ── Statements ── */
+
+statement_list:
+    statement_list statement
+  | statement
+;
+
+statement:
+    wire_stmt
+  | zap_stmt
+  | check_stmt
+  | loop_stmt
+  | give_stmt
+  | func_call_stmt
+;
+
+/* wire <var> = <expr> ; */
+wire_stmt:
+    KW_WIRE var ASSIGN expr SEMICOLON
+;
+
+/* zap <expr> ; */
+zap_stmt:
+    KW_ZAP expr SEMICOLON
+;
+
+/* check <bool_var_or_lit>
+     <statements>
+   [ nope
+     <statements> ]
+   done */
+check_stmt:
+    KW_CHECK expr statement_list KW_DONE
+  | KW_CHECK expr statement_list KW_NOPE statement_list KW_DONE
+;
+
+/* loop <expr>
+     <statements>
+   stop */
+loop_stmt:
+    KW_LOOP expr statement_list KW_STOP
+;
+
+/* give <var> ; */
+give_stmt:
+    KW_GIVE var SEMICOLON
+;
+
+/* Function call as a statement: IDENT [ arg_list ] ; */
+func_call_stmt:
+    IDENT LBRACKET arg_list RBRACKET SEMICOLON
+  | IDENT LBRACKET RBRACKET SEMICOLON
+;
+
+/* ── Expressions ── */
+
+/* VOLT uses postfix operators inside parentheses.
+   The grammar distinguishes:
+     - atomic values (no parens needed)
+     - postfix binary expressions: ( operand operand BINOP )
+     - postfix unary expressions:  ( BOOL_NOT operand )
+     - function calls:             IDENT [ args ]
+*/
+
+expr:
+    atom
+  | LPAREN operand operand binop RPAREN
+  | LPAREN BOOL_NOT operand RPAREN
+  | IDENT LBRACKET arg_list RBRACKET
+  | IDENT LBRACKET RBRACKET
+;
+
+/* An operand inside a postfix expression can itself be a nested postfix expr */
+operand:
+    atom
+  | LPAREN operand operand binop RPAREN
+  | LPAREN BOOL_NOT operand RPAREN
+;
+
+/* Binary postfix operators */
+binop:
+    OP_ADD
+  | OP_SUB
+  | OP_MUL
+  | OP_DIV
+  | OP_MOD
+  | CMP_EQ
+  | CMP_NEQ
+  | CMP_LT
+  | CMP_GT
+  | CMP_LTE
+  | CMP_GTE
+  | BOOL_AND
+  | BOOL_OR
+;
+
+/* Atomic values: literals and variables */
+atom:
+    INT_LIT
+  | STR_LIT
+  | BOOL_LIT
+  | INT_VAR
+  | BOOL_VAR
+  | STR_VAR
+;
+
+/* ── Variable: any sigiled name ── */
+var:
+    INT_VAR
+  | BOOL_VAR
+  | STR_VAR
+;
+
+/* ── Function definition ── */
+
+/* volt <name> [ <params> ] : <return_var>
+     <statements>
+   end
+   
+   volt <name> [] : <return_var>
+     <statements>
+   end
+   
+   (void — no colon/return_var)
+   volt <name> [ <params> ]
+     <statements>
+   end */
+func_def:
+    KW_VOLT IDENT LBRACKET param_list RBRACKET COLON var statement_list KW_END
+  | KW_VOLT IDENT LBRACKET RBRACKET COLON var statement_list KW_END
+  | KW_VOLT IDENT LBRACKET param_list RBRACKET statement_list KW_END
+  | KW_VOLT IDENT LBRACKET RBRACKET statement_list KW_END
+;
+
+/* Parameter list: comma-separated sigiled variables */
+param_list:
+    param_list COMMA var
+  | var
+;
+
+/* Argument list: comma-separated expressions */
+arg_list:
+    arg_list COMMA expr
+  | expr
+;

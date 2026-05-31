@@ -50,10 +50,10 @@ func main() {
 		// tokens directos especiales
 		special := strings.TrimSpace(r.Regex)
 
-if special == "(" ||
-	special == ")" ||
-	special == "{" ||
-	special == "}" {
+		if special == "(" ||
+			special == ")" ||
+			special == "{" ||
+			special == "}" {
 
 			start := automata.NewState()
 			end := automata.NewState()
@@ -184,7 +184,7 @@ if special == "(" ||
 	// 8. READ YALP
 	fmt.Println("\nReading YALP...")
 
-	yalpContent, err := yapar.ReadYalpFile("pico.yalp")
+	yalpContent, err := yapar.ReadYalpFile("arnoldc.yalp")
 
 	if err != nil {
 		panic(err)
@@ -276,6 +276,11 @@ if special == "(" ||
 	// 16. PARSE INPUT
 	fmt.Println("\nPARSING INPUT:")
 
+	fmt.Println("\nTOKEN STREAM REAL:")
+
+	for i, tok := range tokenStream {
+		fmt.Printf("%d -> %s\n", i, tok)
+	}
 	ok := syntax.Parse(
 		table,
 		tokenStream,
@@ -292,4 +297,24 @@ if special == "(" ||
 
 		fmt.Println("\nPARSE FAILED")
 	}
+	fmt.Printf("Loaded %d rules\n", len(rules))
+
+fmt.Println("\n========== RULE DEBUG ==========")
+
+for _, r := range rules {
+
+	if r.Token == "INT_VAR" ||
+		r.Token == "BOOL_VAR" ||
+		r.Token == "STR_VAR" ||
+		r.Token == "IDENT" {
+
+		fmt.Printf(
+			"Rule: %s -> %s\n",
+			r.Token,
+			r.Regex,
+		)
+	}
+}
+
+fmt.Println("================================")
 }

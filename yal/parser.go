@@ -120,7 +120,7 @@ func ParseYAL(path string) ([]Rule, error) {
 		if inRules {
 
 			re := regexp.MustCompile(
-				`\|\s*(.+?)\s*\{\s*return\s+([A-Z_]+|lexbuf)\s*\}`,
+				`\|\s*(.+?)\s*\{\s*return\s+([A-Z_]+)(?:\(lxm\))?\s*\}`,
 			)
 
 			m := re.FindStringSubmatch(line)
@@ -135,7 +135,10 @@ func ParseYAL(path string) ([]Rule, error) {
 				if token == "lexbuf" {
 					continue
 				}
-
+				// ignorar strings complejos
+				if token == "STRING_LIT" || token == "STR_LIT" {
+					continue
+				}
 				regex := expand(raw, letDefs)
 
 				rules = append(
@@ -163,20 +166,23 @@ func expand(expr string, lets map[string]string) string {
 	// =========================
 	if strings.HasPrefix(expr, "\"") {
 
-		s := strings.Trim(expr, "\"")
+    s := strings.Trim(expr, "\"")
 
-		var result []string
+    var result []string
 
-		for _, c := range s {
+    for _, c := range s {
+        result = append(
+            result,
+            escapeLiteral(string(c)),
+        )
+    }
 
-			result = append(
-				result,
-				escapeLiteral(string(c)),
-			)
-		}
+    if strings.Contains(s, " ") {
+        return strings.Join(result, ".")
+    }
 
-		return strings.Join(result, "")
-	}
+    return strings.Join(result, "")
+}
 	// =========================
 	// SINGLE CHAR LITERALS
 	// Ej: '('  ')'  '{'

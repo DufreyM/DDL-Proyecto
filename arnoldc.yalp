@@ -1,0 +1,49 @@
+%token KW_MAIN_START
+%token KW_MAIN_END
+%token KW_PRINT
+%token KW_DECLARE
+%token KW_INIT
+%token KW_ASSIGN_START
+%token KW_ASSIGN_INIT
+%token KW_ASSIGN_END
+%token KW_PLUS
+%token KW_MINUS
+%token KW_TIMES
+%token KW_DIV
+%token IDENT
+%token INT_LIT
+%token STRING_LIT
+
+%%
+
+program:
+KW_MAIN_START stmt_list KW_MAIN_END
+;
+
+stmt_list:
+stmt_list stmt
+| stmt
+;
+
+stmt:
+declare_stmt
+| assign_stmt
+| print_stmt
+;
+
+declare_stmt:
+KW_DECLARE IDENT
+KW_INIT INT_LIT
+;
+
+assign_stmt:
+KW_ASSIGN_START IDENT
+KW_ASSIGN_INIT INT_LIT
+KW_PLUS IDENT
+KW_TIMES INT_LIT
+KW_ASSIGN_END
+;
+
+print_stmt:
+KW_PRINT IDENT
+;
