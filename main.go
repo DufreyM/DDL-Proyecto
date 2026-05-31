@@ -15,9 +15,13 @@ import (
 	"yalex-full/yapar"
 )
 
+const DEBUG = false
+
 func main() {
 
+	// =========================
 	// ARGS
+	// =========================
 	if len(os.Args) < 3 {
 		fmt.Println("Usage: go run main.go file.yal input.txt")
 		return
@@ -26,28 +30,43 @@ func main() {
 	yalFile := os.Args[1]
 	inputFile := os.Args[2]
 
-	// 1. PARSE YAL
-	fmt.Println("Parsing YAL...")
+	fmt.Println("===================================")
+	fmt.Println("      YALEX + YAPAR COMPILER")
+	fmt.Println("===================================")
+	fmt.Printf("YAL:   %s\n", yalFile)
+	fmt.Printf("INPUT: %s\n", inputFile)
+
+	// =========================
+	// PARSE YAL
+	// =========================
+	fmt.Println("\n[1] Parsing YAL...")
 
 	rules, err := yal.ParseYAL(yalFile)
-	fmt.Println("\nRULES FOUND:")
-	fmt.Printf("%+v\n", rules)
-	fmt.Println("TOTAL RULES:", len(rules))
+
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("Loaded %d rules\n", len(rules))
+	if DEBUG {
+		fmt.Println("\nRULES FOUND:")
+		fmt.Printf("%+v\n", rules)
+	}
 
-	// 2. BUILD NFA
-	fmt.Println("\nBuilding NFAs...")
+	fmt.Printf("Loaded %d lexical rules\n", len(rules))
+
+	// =========================
+	// BUILD NFA
+	// =========================
+	fmt.Println("\n[2] Building NFAs...")
 
 	var nfas []*automata.NFA
 
 	for i, r := range rules {
 
-		fmt.Printf("Rule: %s -> %s\n", r.Token, r.Regex)
-		// tokens directos especiales
+		if DEBUG {
+			fmt.Printf("Rule: %s -> %s\n", r.Token, r.Regex)
+		}
+
 		special := strings.TrimSpace(r.Regex)
 
 		if special == "(" ||
@@ -77,11 +96,13 @@ func main() {
 
 			continue
 		}
+
 		postfix := regex.ToPostfix(r.Regex)
 
-		fmt.Printf("Postfix: %s\n", postfix)
+		if DEBUG {
+			fmt.Printf("Postfix: %s\n", postfix)
+		}
 
-		// generar AST visual solo primera regex
 		if i == 0 {
 
 			ast := regex.BuildAST(postfix)
@@ -98,18 +119,22 @@ func main() {
 		nfas = append(nfas, nfa)
 	}
 
-	// 3. COMBINE NFAs
-	fmt.Println("\nCombining NFAs...")
+	fmt.Printf("Built %d NFAs\n", len(nfas))
+
+	// =========================
+	// DFA
+	// =========================
+	fmt.Println("\n[3] Building DFA...")
 
 	global := automata.CombineNFAs(nfas)
-
-	// 4. BUILD DFA
-	fmt.Println("Building DFA...")
-
 	dfa := automata.BuildDFA(global)
 
-	// 5. GENERATE LEXER
-	fmt.Println("Generating lexer...")
+	fmt.Printf("DFA States: %d\n", len(dfa.States))
+
+	// =========================
+	// GENERATE LEXER
+	// =========================
+	fmt.Println("\n[4] Generating lexer...")
 
 	err = generator.GenerateLexer(dfa)
 
@@ -117,8 +142,10 @@ func main() {
 		panic(err)
 	}
 
-	// 6. RUN LEXER
-	fmt.Println("\nRunning lexer...")
+	// =========================
+	// RUN LEXER
+	// =========================
+	fmt.Println("\n[5] Running lexer...")
 
 	data, err := os.ReadFile(inputFile)
 
@@ -140,90 +167,72 @@ func main() {
 		symbolTable.Add(t)
 	}
 
-	fmt.Println("\nTOKENS:")
+	fmt.Println("\nTOKENS")
+	fmt.Println("--------------------------------")
 
 	for _, t := range tokens {
 
 		fmt.Printf(
-			"%s -> %s\n",
+			"%-20s %s\n",
 			t.Type,
 			t.Value,
 		)
 	}
 
-	fmt.Println("\nSYMBOL TABLE:")
+	fmt.Println("\nSYMBOL TABLE")
+	fmt.Println("--------------------------------")
 
 	for _, s := range symbolTable.Symbols {
 
 		fmt.Printf(
-			"LEXEME=%s TOKEN=%s LINE=%d\n",
+			"%-15s %-15s line %d\n",
 			s.Lexeme,
 			s.Token,
 			s.Line,
 		)
 	}
 
-	// 7. BUILD TOKEN STREAM
+	// =========================
+	// TOKEN STREAM
+	// =========================
 	var tokenStream []string
 
 	for _, t := range tokens {
 		tokenStream = append(tokenStream, t.Type)
 	}
 
-	fmt.Println("\nTOKEN STREAM:")
+	fmt.Println("\nTOKEN STREAM")
+	fmt.Println("--------------------------------")
+	fmt.Println(strings.Join(tokenStream, " "))
 
-	for i, t := range tokenStream {
+	// =========================
+	// READ YALP
+	// =========================
+	fmt.Println("\n[6] Reading grammar...")
 
-		fmt.Printf(
-			"%d -> %s\n",
-			i,
-			t,
-		)
-	}
-
-	// 8. READ YALP
-	fmt.Println("\nReading YALP...")
-
-	yalpContent, err := yapar.ReadYalpFile("arnoldc.yalp")
+	yalpContent, err := yapar.ReadYalpFile("pico.yalp")
 
 	if err != nil {
 		panic(err)
 	}
 
-	// 9. EXTRACT TOKENS
 	grammarTokens := yapar.ExtractTokens(yalpContent)
-
-	fmt.Println("\nGRAMMAR TOKENS:")
-	fmt.Println(grammarTokens)
-
-	// 10. EXTRACT PRODUCTIONS
 	productions := yapar.ExtractProductions(yalpContent)
 
-	fmt.Println("\nPRODUCTIONS:")
+	fmt.Printf("Grammar Tokens: %d\n", len(grammarTokens))
+	fmt.Printf("Productions: %d\n", len(productions))
 
-	for left, rules := range productions {
-
-		fmt.Printf("%s -> %v\n", left, rules)
-	}
-
-	// 11. BUILD GRAMMAR
+	// =========================
+	// BUILD GRAMMAR
+	// =========================
 	grammar := syntax.Grammar{
 		Productions: productions,
 	}
 
-	// 12. FIRST / FOLLOW
-	fmt.Println("\nFIRST(expr):")
-	fmt.Println(
-		syntax.First(grammar, "expr"),
-	)
-
-	fmt.Println("\nFOLLOW(expr):")
-	fmt.Println(
-		syntax.Follow(grammar, "expr", "expr"),
-	)
-
-	// 13. BUILD LR(0)
-	fmt.Println("\nBuilding LR(0)...")
+	// =========================
+	// LR(0)
+	// =========================
+	fmt.Println("\n[7] Building LR(0)...")
 
 	states := syntax.BuildCanonicalCollection(
 		grammar,
@@ -231,39 +240,43 @@ func main() {
 	)
 
 	fmt.Printf(
-		"Generated %d states\n",
+		"Generated %d LR(0) states\n",
 		len(states),
 	)
 
-	// 14. PRINT STATES
-	for _, state := range states {
+	if DEBUG {
 
-		fmt.Printf("\nSTATE %d\n", state.ID)
+		for _, state := range states {
 
-		for _, item := range state.Items {
+			fmt.Printf("\nSTATE %d\n", state.ID)
 
-			fmt.Printf(
-				"%s -> %v (dot=%d)\n",
-				item.Left,
-				item.Right,
-				item.Dot,
-			)
-		}
+			for _, item := range state.Items {
 
-		fmt.Println("Transitions:")
+				fmt.Printf(
+					"%s -> %v (dot=%d)\n",
+					item.Left,
+					item.Right,
+					item.Dot,
+				)
+			}
 
-		for symbol, target := range state.Transitions {
+			fmt.Println("Transitions:")
 
-			fmt.Printf(
-				"%s -> %d\n",
-				symbol,
-				target,
-			)
+			for symbol, target := range state.Transitions {
+
+				fmt.Printf(
+					"%s -> %d\n",
+					symbol,
+					target,
+				)
+			}
 		}
 	}
 
-	// 15. BUILD SLR TABLE
-	fmt.Println("\nBuilding SLR Table...")
+	// =========================
+	// SLR TABLE
+	// =========================
+	fmt.Println("\n[8] Building SLR Table...")
 
 	table := syntax.BuildSLRTable(
 		grammar,
@@ -273,14 +286,13 @@ func main() {
 
 	fmt.Println("SLR table generated")
 
-	// 16. PARSE INPUT
-	fmt.Println("\nPARSING INPUT:")
+	// =========================
+	// PARSE
+	// =========================
+	fmt.Println("\n===================================")
+	fmt.Println("PARSING")
+	fmt.Println("===================================")
 
-	fmt.Println("\nTOKEN STREAM REAL:")
-
-	for i, tok := range tokenStream {
-		fmt.Printf("%d -> %s\n", i, tok)
-	}
 	ok := syntax.Parse(
 		table,
 		tokenStream,
@@ -288,33 +300,12 @@ func main() {
 		"program",
 	)
 
-	// FINAL RESULT
 	if ok {
 
-		fmt.Println("\nPARSE SUCCESS")
+		fmt.Println("\n✓ PARSE SUCCESS")
 
 	} else {
 
-		fmt.Println("\nPARSE FAILED")
+		fmt.Println("\n✗ PARSE FAILED")
 	}
-	fmt.Printf("Loaded %d rules\n", len(rules))
-
-fmt.Println("\n========== RULE DEBUG ==========")
-
-for _, r := range rules {
-
-	if r.Token == "INT_VAR" ||
-		r.Token == "BOOL_VAR" ||
-		r.Token == "STR_VAR" ||
-		r.Token == "IDENT" {
-
-		fmt.Printf(
-			"Rule: %s -> %s\n",
-			r.Token,
-			r.Regex,
-		)
-	}
-}
-
-fmt.Println("================================")
 }
