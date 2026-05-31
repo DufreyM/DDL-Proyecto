@@ -1,0 +1,76 @@
+(* volt.yal — YALex specification for the VOLT language *)
+
+{
+(* Generated lexer for VOLT — sigil-typed, postfix-operator language *)
+}
+
+(* ── Base character classes ─────────────────────────── *)
+
+let digit    = ['0'-'9']
+let nonzero  = ['1'-'9']
+let lower    = ['a'-'z']
+let alphanum = lower | digit | '_'
+
+let int_lit  = ('~'? '0') | ('~'? nonzero digit*)
+let sq_char  = [^ '\'' '\n' '\\'] | '\\' _
+let str_lit  = '\'' sq_char* '\''
+let ident    = lower alphanum*
+let line_cmt = '~' '~' [^ '\n']* '\n'
+
+(* ══════════════════════════════════════════════════════ *)
+
+rule gettoken =
+
+    [' ' '\t' '\n' '\r']          { return lexbuf }
+  | line_cmt                      { return lexbuf }
+
+  | '$' ident                     { return INT_VAR }
+  | '#' ident                     { return BOOL_VAR }
+  | '@' ident                     { return STR_VAR }
+
+  | "yes"                         { return BOOL_LIT }
+  | "no"                          { return BOOL_LIT }
+
+  | "ADD"                         { return OP_ADD }
+  | "SUB"                         { return OP_SUB }
+  | "MUL"                         { return OP_MUL }
+  | "DIV"                         { return OP_DIV }
+  | "MOD"                         { return OP_MOD }
+
+  | "NEQ"                         { return CMP_NEQ }
+  | "LTE"                         { return CMP_LTE }
+  | "GTE"                         { return CMP_GTE }
+  | "EQ"                          { return CMP_EQ }
+  | "LT"                          { return CMP_LT }
+  | "GT"                          { return CMP_GT }
+
+  | "AND"                         { return BOOL_AND }
+  | "OR"                          { return BOOL_OR }
+  | "NOT"                         { return BOOL_NOT }
+
+  | "zap"                         { return KW_ZAP }
+  | "check"                       { return KW_CHECK }
+  | "nope"                        { return KW_NOPE }
+  | "done"                        { return KW_DONE }
+  | "loop"                        { return KW_LOOP }
+  | "stop"                        { return KW_STOP }
+  | "volt"                        { return KW_VOLT }
+  | "end"                         { return KW_END }
+  | "give"                        { return KW_GIVE }
+  | "wire"                        { return KW_WIRE }
+
+  | int_lit                       { return INT_LIT }
+  | str_lit                       { return STR_LIT }
+
+  | '='                           { return ASSIGN }
+  | '('                           { return LPAREN }
+  | ')'                           { return RPAREN }
+  | '['                           { return LBRACKET }
+  | ']'                           { return RBRACKET }
+  | ';'                           { return SEMICOLON }
+  | ':'                           { return COLON }
+  | ','                           { return COMMA }
+
+  | ident                         { return IDENT }
+
+  | eof                           { raise( 'End of input' ) }
